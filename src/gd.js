@@ -70,8 +70,14 @@ function get_sa_batch () {
   })
 }
 
-handle_exit(() => {
-  // console.log('handle_exit running')
+handle_exit((code, signal) => {
+  // console.log(code, signal)
+  // ctrl+c: null SIGINT
+  // pm2 reload: null SIGINT
+  // tg bot /reload: 0 null
+  // normal exit: 0 null
+  if (code === 0 && !is_pm2()) return // normal exit in command line, do nothing
+  // TODO: record running task ID for each thread
   const records = db.prepare('select id from task where status=?').all('copying')
   records.forEach(v => {
     db.prepare('update task set status=? where id=?').run('interrupt', v.id)
@@ -705,21 +711,21 @@ async function copy_file (id, parent, use_sa, limit, task_id) {
       if (!use_sa && message && message.toLowerCase().includes('rate limit')) {
         throw new Error('个人帐号触发限制：' + message)
       }
-      if (use_sa && message && message.toLowerCase().includes('user rate limit')) {
-        if (retry >= RETRY_LIMIT) throw new Error(`此资源连续${EXCEED_LIMIT}次触发userRateLimitExceeded错误，停止复制`)
-        if (gtoken.exceed_count >= EXCEED_LIMIT) {
-          SA_TOKENS = SA_TOKENS.filter(v => v.gtoken !== gtoken)
-          if (!SA_TOKENS.length) SA_TOKENS = get_sa_batch()
-          console.log(`此帐号连续${EXCEED_LIMIT}次触发使用限额，本批次剩余可用SA数量：`, SA_TOKENS.length)
-        } else {
-          // console.log('此帐号触发使用限额，已标记，若下次请求正常则解除标记，否则剔除此SA')
-          if (gtoken.exceed_count) {
-            gtoken.exceed_count++
-          } else {
-            gtoken.exceed_count = 1
-          }
-        }
-      }
+      // if (use_sa && message && message.toLowerCase().includes('user rate limit')) {
+      //   if (retry >= RETRY_LIMIT) throw new Error(`此资源连续${EXCEED_LIMIT}次触发userRateLimitExceeded错误，停止复制`)
+      //   if (gtoken.exceed_count >= EXCEED_LIMIT) {
+      //     SA_TOKENS = SA_TOKENS.filter(v => v.gtoken !== gtoken)
+      //     if (!SA_TOKENS.length) SA_TOKENS = get_sa_batch()
+      //     console.log(`此帐号连续${EXCEED_LIMIT}次触发使用限额，本批次剩余可用SA数量：`, SA_TOKENS.length)
+      //   } else {
+      //     console.log('此帐号触发使用限额，已标记，若下次请求正常则解除标记，否则剔除此SA')
+      //     if (gtoken.exceed_count) {
+      //       gtoken.exceed_count++
+      //     } else {
+      //       gtoken.exceed_count = 1
+      //     }
+      //   }
+      // }
     }
   }
   if (use_sa && !SA_TOKENS.length) {
